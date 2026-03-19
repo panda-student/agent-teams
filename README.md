@@ -1,20 +1,39 @@
-# Agent Teams
+# Agent Skills 仓库
 
-多 Agent 协作技能，用于创建多个 Claude Code 实例进行团队协作。
+用于存储和迭代 AI Agent 技能。
 
-## 安装
+## 技能列表
 
-```bash
-# 克隆到你的 skills 目录
-git clone git@github.com:panda-student/agent-teams.git ~/.openclaw/workspace/skills/agent-teams
+| 技能 | 说明 | 文档 |
+|------|------|------|
+| [agent-teams](skills/agent-teams/) | 多 Agent 协作技能 | [查看](skills/agent-teams/README.md) |
+
+## 目录结构
+
+```
+skills/
+├── agent-teams/          # 多 Agent 协作技能
+│   ├── SKILL.md          # 技能定义
+│   ├── README.md         # 使用说明
+│   ├── references/       # 参考文档
+│   ├── assets/           # 资源文件
+│   └── scripts/          # 脚本
+└── [其他技能]/           # 更多技能...
 ```
 
-## 使用模式
+## 添加新技能
 
-1. **开发需求模式** - 适用于新功能开发、需求实现
-2. **修复bug模式** - 适用于问题排查、bug 修复
+1. 在 `skills/` 目录下创建新文件夹
+2. 添加 `SKILL.md` 定义技能
+3. 添加 `README.md` 说明文档
+4. 更新本文件的技能列表
 
-## 文档
+## 安装技能
 
-- [竞争假设模式](references/competitive-hypothesis/index.md)
-- [开发工作流](references/development-workflow/planning.md)
+```bash
+# 克隆仓库
+git clone git@github.com:panda-student/agent-teams.git
+
+# 复制技能到本地
+cp -r agent-teams/skills/[技能名] ~/.openclaw/workspace/skills/
+```
