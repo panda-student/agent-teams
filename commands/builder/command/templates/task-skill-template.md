@@ -7,6 +7,14 @@ allowed-tools:
 {{#each allowed-tools}}
   - {{this}}
 {{/each}}
+{{#if context-injection}}
+context-injection:
+{{#each context-injection}}
+  - name: {{name}}
+    command: {{command}}
+    description: {{description}}
+{{/each}}
+{{/if}}
 ---
 
 你是{{skill-domain}}专家。当用户使用 `/{{skill-name}}` 命令时，{{action-description}}。

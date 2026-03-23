@@ -7,11 +7,10 @@
 - **触发方式**：语义自动触发
 - **适用场景**：规范、知识、风格、约定
 - **特点**：无执行步骤，提供参考信息
-- **示例**：api-convention、code-style、git-workflow
+- **示例**：api-rule、style-guide、git-flow
 
 ## 3. 设计要点
-- 不需要 `disable-model-invocation` 配置
-- 允许模型主动加载和引用
+- **不设置 `disable-model-invocation`**（或设为 false），作为"知识提供者"允许 Claude 主动调用
 - 内容以知识、规范、标准为主
 - 无副作用操作
 
@@ -49,18 +48,24 @@ allowed-tools:
 
 ```
 用户：我想设计一个用户登录的 API 接口
-助手：[自动触发 api-convention] 根据 API 规范，建议使用 POST /auth/login...
+助手：[自动触发 api-rule] 根据 API 规范，建议使用 POST /auth/login...
 ```
 
 ## 8. 与任务型 Skill 的区别
+
+**核心区别：disable-model-invocation 决定 Skill 本质**
+
+| 类型 | disable-model-invocation | 本质 |
+|------|-------------------------|------|
+| **参考型** | `false` 或不设置 | 知识提供者（Claude 可主动调用） |
+| **任务型** | `true` | 动作执行者（必须用户手动触发） |
 
 | 特征 | 参考型 Skill | 任务型 Skill |
 |------|-------------|-------------|
 | 触发方式 | 语义自动触发 | 斜杠命令手动触发 |
 | 适用场景 | 规范/知识/标准 | 执行操作/部署/脚本 |
 | 权限配置 | 只读权限 | 读写权限 |
-| 关键配置 | 无需 disable-model-invocation | **必须** disable-model-invocation: true |
-| 命名规范 | 名词+名词 | 动词+名词 |
+| 命名规范 | 名词+最简词 | 动词+最简词 |
 | 副作用 | 无 | 可能有（文件修改、部署等） |
 
 ## 9. 最佳实践
@@ -85,4 +90,24 @@ allowed-tools:
 
 ## 10. 典型示例
 
-详见 [examples.md](../examples.md) 参考型 Skill 示例部分。
+### API 规范 Skill
+```yaml
+---
+name: api-rule
+description: 定义项目 RESTful API 设计规范，包含URL命名、响应格式、状态码与鉴权规则，在编写/审查接口、设计新API、确定请求响应格式时自动使用
+allowed-tools:
+  - Read
+  - Grep
+  - Glob
+---
+
+你是项目的 API 设计规范专家。当用户讨论 API 设计、接口定义或 RESTful 规范时，提供符合项目标准的指导。
+
+## 核心原则
+- 遵循 RESTful 设计规范
+- 使用统一的响应格式
+- 实施版本控制策略
+- 保证接口安全性
+
+详细规范请参考 [reference.md](./reference.md)
+```

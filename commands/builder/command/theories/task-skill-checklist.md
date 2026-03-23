@@ -11,6 +11,9 @@
 - 简化原则：使用最简单的单词，避免复杂词汇
 
 ## 第二步：触发控制
+
+**核心逻辑**：`disable-model-invocation` 决定 Skill 是"知识提供者"还是"动作执行者"。任务型绝不让 Claude 自作主张触发。
+
 设置 `disable-model-invocation: true`，仅允许用户手动触发
 
 ### 配置示例
