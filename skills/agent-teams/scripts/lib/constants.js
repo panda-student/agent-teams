@@ -16,7 +16,10 @@ const DIRS = {
   SEGMENTS: 'segments',
   CHECKPOINTS: 'checkpoints',
   HISTORY: 'history',
-  WORKERS: 'workers'
+  WORKERS: 'workers',
+  DELIVERABLES: 'deliverables',
+  PLANS: 'plans',
+  REPORTS: 'reports'
 };
 
 // 文件名
@@ -115,9 +118,11 @@ function getPaths(baseDir) {
     core: path.join(contextDir, DIRS.CORE),
     active: path.join(contextDir, DIRS.ACTIVE),
     segments: path.join(contextDir, DIRS.SEGMENTS),
-    checkpoints: path.join(contextDir, DIRS.CHECKPOINTS),
+    checkpoints: path.join(contextDir, DIRS.HISTORY, DIRS.CHECKPOINTS),
     history: path.join(contextDir, DIRS.HISTORY),
     workers: path.join(contextDir, DIRS.WORKERS),
+    plans: path.join(contextDir, DIRS.PLANS),
+    reports: path.join(contextDir, DIRS.REPORTS),
 
     // 核心文件
     mission: path.join(contextDir, DIRS.CORE, FILES.MISSION),

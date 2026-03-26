@@ -32,21 +32,17 @@ class ContextManager {
     this._initDirectories();
   }
 
-  /**
+ /**
    * 初始化目录结构
    */
   _initDirectories() {
-    for (const key of Object.keys(DIRS)) {
-      ensureDir(this.paths[key.toLowerCase()] || path.join(this.paths.context, DIRS[key.toLowerCase()]));
-    }
-
-    // 确保关键目录存在
+    ensureDir(this.paths.context);
     ensureDir(this.paths.core);
     ensureDir(this.paths.active);
-    ensureDir(this.paths.segments);
-    ensureDir(this.paths.checkpoints);
     ensureDir(this.paths.history);
     ensureDir(this.paths.workers);
+    ensureDir(this.paths.plans);
+    ensureDir(this.paths.reports);
   }
 
   /**
@@ -319,26 +315,65 @@ ${this._getNextSteps()}
   }
 
   /**
+   * 确保WAL可用
+   * 如果当前没有WAL，自动创建一个默认segment
+   */
+  _ensureWAL() {
+    if (this.currentWAL) return this.currentWAL;
+
+    if (!this.state) {
+      this.loadState();
+    }
+
+    if (!this.state) return null;
+
+    const segmentId = this.state.current_segment || `auto-${Date.now()}`;
+    
+    if (!this.state.current_segment) {
+      const segmentDir = path.join(this.paths.segments, segmentId);
+      ensureDir(segmentDir);
+
+      const segmentConfig = {
+        id: segmentId,
+        type: 'auto_created',
+        parent_phase: this.state.current_phase,
+        tasks: [],
+        status: TASK_STATUS.IN_PROGRESS,
+        created_at: getTimestamp()
+      };
+
+      writeYAML(path.join(segmentDir, 'segment.yaml'), segmentConfig);
+      this.state.current_segment = segmentId;
+      this._saveState();
+    }
+
+    this.currentWAL = new WALManager(
+      path.join(this.paths.segments, segmentId),
+      segmentId
+    );
+
+    return this.currentWAL;
+  }
+
+  /**
    * 记录状态变更
    * @param {string} type - 变更类型
    * @param {object} data - 变更数据
    * @returns {object|null} 压缩任务指令（如果需要压缩）
    */
   recordChange(type, data) {
-    if (this.currentWAL) {
-      this.currentWAL.write(type, data);
+    const wal = this._ensureWAL();
+    if (wal) {
+      wal.write(type, data);
     }
 
-    // 更新缓冲区
     this.buffer.push({ type, data, ts: getTimestamp() });
 
-    // 检查是否需要刷新
     if (this.buffer.length >= BATCH_CONFIG.BUFFER_SIZE ||
         Date.now() - this.lastFlush > BATCH_CONFIG.MAX_WAIT_MS) {
       this.flush();
     }
 
-    // 返回压缩任务指令（由主Agent调度子Agent执行）
     return this._checkCompressNeeded();
   }
 

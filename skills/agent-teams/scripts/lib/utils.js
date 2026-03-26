@@ -93,66 +93,80 @@ function readYAML(filePath, defaultValue = null) {
  * @returns {object} 解析后的对象
  */
 function parseSimpleYAML(content) {
-  const result = {};
   const lines = content.split('\n');
-  const stack = [{ obj: result, indent: -1 }];
+  const root = {};
+  const stack = [{ obj: root, indent: -1, key: null, isArray: false }];
+  let currentArrayItem = null;
+  let currentArrayItemIndent = -1;
 
-  for (const line of lines) {
-    // 跳过注释和空行
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (line.trim().startsWith('#') || line.trim() === '') continue;
 
-    // 检测缩进
     const indent = line.search(/\S/);
     const trimmed = line.trim();
 
-    // 数组项
+    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) {
+      stack.pop();
+    }
+
+    const top = stack[stack.length - 1];
+    currentArrayItem = null;
+
     if (trimmed.startsWith('- ')) {
-      const parent = stack[stack.length - 1];
-      if (Array.isArray(parent.obj)) {
-        const value = trimmed.slice(2).trim();
+      const value = trimmed.slice(2).trim();
+
+      if (Array.isArray(top.obj)) {
         if (value.includes(': ')) {
-          const obj = {};
-          const [k, v] = value.split(': ', 2);
-          obj[k] = parseValue(v);
-          parent.obj.push(obj);
+          const colonIndex = value.indexOf(': ');
+          const key = value.slice(0, colonIndex);
+          const val = value.slice(colonIndex + 2);
+          const newObj = { [key]: parseValue(val) };
+          top.obj.push(newObj);
+          currentArrayItem = newObj;
+          currentArrayItemIndent = indent;
+
+          const nextLine = lines[i + 1] || '';
+          const nextIndent = nextLine.search(/\S/);
+          if (nextIndent > indent && !nextLine.trim().startsWith('-')) {
+            stack.push({ obj: newObj, indent: indent, key: null, isArray: false });
+          }
         } else {
-          parent.obj.push(parseValue(value));
+          top.obj.push(parseValue(value));
         }
       }
       continue;
     }
 
-    // 键值对
     if (trimmed.includes(':')) {
       const colonIndex = trimmed.indexOf(':');
       const key = trimmed.slice(0, colonIndex).trim();
       const value = trimmed.slice(colonIndex + 1).trim();
 
-      // 弹出栈直到当前缩进级别
-      while (stack.length > 1 && stack[stack.length - 1].indent >= indent) {
-        stack.pop();
+      let targetObj = top.obj;
+      if (currentArrayItem && indent > currentArrayItemIndent && !Array.isArray(top.obj)) {
+        targetObj = top.obj;
       }
 
-      const current = stack[stack.length - 1].obj;
-
-      // 检查是否是嵌套对象或数组
       if (value === '' || value.startsWith('|')) {
-        // 检查下一行是否是数组
-        const nextLineIdx = lines.indexOf(line) + 1;
-        const nextLine = lines[nextLineIdx] || '';
+        const nextLine = lines[i + 1] || '';
+        const nextIndent = nextLine.search(/\S/);
         if (nextLine.trim().startsWith('-')) {
-          current[key] = [];
+          targetObj[key] = [];
+          stack.push({ obj: targetObj[key], indent: indent, key: key, isArray: true });
+        } else if (nextIndent > indent) {
+          targetObj[key] = {};
+          stack.push({ obj: targetObj[key], indent: indent, key: key, isArray: false });
         } else {
-          current[key] = {};
-          stack.push({ obj: current[key], indent: indent });
+          targetObj[key] = value === '|' ? '' : parseValue(value);
         }
       } else {
-        current[key] = parseValue(value);
+        targetObj[key] = parseValue(value);
       }
     }
   }
 
-  return result;
+  return root;
 }
 
 /**
@@ -161,13 +175,17 @@ function parseSimpleYAML(content) {
  * @returns {*} 解析后的值
  */
 function parseValue(value) {
-  // 移除引号
+  if (value.startsWith('[') && value.endsWith(']')) {
+    const inner = value.slice(1, -1).trim();
+    if (inner === '') return [];
+    return inner.split(',').map(item => parseValue(item.trim()));
+  }
+
   if ((value.startsWith('"') && value.endsWith('"')) ||
       (value.startsWith("'") && value.endsWith("'"))) {
     return value.slice(1, -1);
   }
 
-  // 数字
   if (/^-?\d+$/.test(value)) {
     return parseInt(value, 10);
   }
@@ -175,11 +193,8 @@ function parseValue(value) {
     return parseFloat(value);
   }
 
-  // 布尔值
   if (value === 'true') return true;
   if (value === 'false') return false;
-
-  // null
   if (value === 'null' || value === '~') return null;
 
   return value;
@@ -199,15 +214,41 @@ function toYAML(obj, indent = 0) {
     if (value === null || value === undefined) {
       lines.push(`${spaces}${key}: null`);
     } else if (Array.isArray(value)) {
-      lines.push(`${spaces}${key}:`);
-      for (const item of value) {
-        if (typeof item === 'object' && item !== null) {
-          lines.push(`${spaces}  -`);
-          for (const [k, v] of Object.entries(item)) {
-            lines.push(`${spaces}    ${k}: ${formatYAMLValue(v)}`);
+      if (value.length === 0) {
+        lines.push(`${spaces}${key}: []`);
+      } else {
+        lines.push(`${spaces}${key}:`);
+        for (const item of value) {
+          if (typeof item === 'object' && item !== null) {
+            const itemLines = [];
+            for (const [k, v] of Object.entries(item)) {
+              if (v === null || v === undefined) continue;
+              if (Array.isArray(v)) {
+                if (v.length === 0) {
+                  itemLines.push(`${k}: []`);
+                } else if (v.every(x => typeof x === 'string' || typeof x === 'number')) {
+                  itemLines.push(`${k}: [${v.map(x => formatYAMLValue(x)).join(', ')}]`);
+                } else {
+                  const subLines = [`${k}:`];
+                  for (const subItem of v) {
+                    if (typeof subItem === 'object' && subItem !== null) {
+                      subLines.push(`  - ${JSON.stringify(subItem)}`);
+                    } else {
+                      subLines.push(`  - ${formatYAMLValue(subItem)}`);
+                    }
+                  }
+                  itemLines.push(subLines.join('\n' + spaces + '    '));
+                }
+              } else if (typeof v === 'object') {
+                itemLines.push(`${k}: ${JSON.stringify(v)}`);
+              } else {
+                itemLines.push(`${k}: ${formatYAMLValue(v)}`);
+              }
+            }
+            lines.push(`${spaces}  - ${itemLines.join('\n' + spaces + '    ')}`);
+          } else {
+            lines.push(`${spaces}  - ${formatYAMLValue(item)}`);
           }
-        } else {
-          lines.push(`${spaces}  - ${formatYAMLValue(item)}`);
         }
       }
     } else if (typeof value === 'object') {
@@ -228,7 +269,6 @@ function toYAML(obj, indent = 0) {
  */
 function formatYAMLValue(value) {
   if (typeof value === 'string') {
-    // 如果包含特殊字符，添加引号
     if (/[:#\[\]{}|>]/.test(value) || value.includes('\n')) {
       return `"${value.replace(/"/g, '\\"')}"`;
     }
@@ -299,7 +339,6 @@ function listFiles(dirPath, pattern = null) {
 
     const files = fs.readdirSync(dirPath);
     if (pattern) {
-      // 简单的扩展名匹配
       if (pattern.startsWith('*.')) {
         const ext = pattern.slice(1);
         return files.filter(f => f.endsWith(ext));
