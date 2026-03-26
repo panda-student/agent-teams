@@ -4,13 +4,160 @@
 
 ---
 
-## 示例一：标准开发流程
+## 目录
 
-### 场景描述
+- [API 使用示例](#api-使用示例)
+- [执行模式示例](#执行模式示例)
+- [快速开始示例](#快速开始示例)
+- [完整工作流示例](#完整工作流示例)
+
+---
+
+## API 使用示例
+
+### 基础 API 调用
+
+```javascript
+const at = require('./scripts/index');
+
+// 步骤1: 获取分析指令
+const analysisInstruction = at.getAnalysisInstruction('开发用户登录功能');
+// 返回: { needs_analysis: true, analysis_instruction: { action, agent_type, prompt, expected_output } }
+
+// 步骤2: 启动Agent执行分析（由主Agent调用Agent工具）
+// Agent返回分析结果
+
+// 步骤3: 应用分析结果
+const plan = at.planWithResult('.', '开发用户登录功能', analysisResult);
+// 返回完整的执行计划
+
+// 或者一步完成（需要先获取分析结果）
+const plan = at.plan('.', '开发用户登录功能');
+// 返回: { needs_analysis: true, analysis_instruction: {...} }
+```
+
+---
+
+## 执行模式示例
+
+### 模式1: 独立Agent并行（推荐）
+
+**适用**: 探索类、评审类、独立开发任务
+
+```javascript
+// 主Agent执行调度（不执行具体任务）
+const plan = at.plan('.', '探索代码库架构');
+
+// 在单个消息中同时启动多个Agent（获得独立上下文）
+// 每个Agent有~200k tokens独立上下文，互不影响
+```
+
+**启动方式**：在单个响应中调用多个Agent工具
+
+```
+Agent 1: subagent_type="search", prompt="探索src/core/目录..."
+Agent 2: subagent_type="search", prompt="探索src/api/目录..."
+Agent 3: subagent_type="search", prompt="分析package.json..."
+... (并行启动8个Agent)
+```
+
+**优势**：
+- 每个Agent有独立上下文，不会互相污染
+- 主Agent只接收聚合结果，保持精简
+- 最大化并行效率
+
+---
+
+### 模式2: Team协作
+
+**适用**: 开发类任务（需要多Agent协作）
+
+```javascript
+// 1. 创建Team
+TeamCreate({ team_name: "dev-login", description: "开发登录功能" })
+
+// 2. 创建任务
+TaskCreate({ subject: "需求分析", description: "..." })
+TaskCreate({ subject: "API设计", description: "..." })
+TaskCreate({ subject: "前端开发", description: "..." })
+
+// 3. 启动Worker Agent（team模式）
+Agent({
+  subagent_type: "general-purpose",
+  team_name: "dev-login",
+  prompt: "加入团队，查看任务列表..."
+})
+```
+
+**协作机制**：
+- Team成员共享任务列表（TaskList）
+- 通过SendMessage通信
+- Team Leader协调任务分配
+
+---
+
+### 模式3: 后台Task
+
+**适用**: 测试、构建、简单命令
+
+```javascript
+// 仅用于不需要独立上下文的简单任务
+Task({ prompt: "npm test" })
+Task({ prompt: "npm run build" })
+```
+
+---
+
+## 快速开始示例
+
+### 完整工作流程
+
+```javascript
+const at = require('./scripts/index');
+
+// 1. 检查恢复
+if (at.checkRecovery('.').needed) {
+  at.recover('.');
+}
+
+// 2. 任务规划
+const plan = at.plan('.', '开发用户登录功能');
+
+// 3. 根据plan.next_action决定启动方式
+if (plan.next_action.parallel) {
+  // 并行启动多个独立Agent
+  // 在单个响应中调用多个Agent工具
+} else {
+  // 串行启动Agent
+}
+
+// 4. 阶段完成后创建检查点
+at.checkpoint('.', 'segment');
+
+// 5. 检查上下文使用情况
+const usage = at.contextUsage('.');
+if (usage.recommendation === 'compress') {
+  at.compress('.', { keepRecent: 5 });
+}
+
+// 6. 获取精简摘要（传递给子Agent）
+const summary = at.getSummary('.');
+
+// 7. 所有阶段完成后
+at.complete('.');
+```
+
+---
+
+## 完整工作流示例
+
+### 示例一：标准开发流程
+
+#### 场景描述
 
 用户需要开发一个用户登录功能。
 
-### 触发过程
+#### 触发过程
 
 ```
 用户: 帮我开发一个用户登录功能
@@ -38,7 +185,7 @@
 👉 进入 标准开发流程 (config: .claude/config/templates/standard-dev.yaml)
 ```
 
-### 规划阶段
+#### 规划阶段
 
 ```
 📋 正在分析需求...
@@ -72,7 +219,7 @@
 - 切换配置：指定其他配置模板
 ```
 
-### 执行阶段
+#### 执行阶段
 
 ```
 用户: 确认
@@ -136,7 +283,7 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-### 输出阶段
+#### 输出阶段
 
 ```
 🎉 标准开发流程 执行完成
@@ -168,13 +315,13 @@
 
 ---
 
-## 示例二：Bug修复流程
+### 示例二：Bug修复流程
 
-### 场景描述
+#### 场景描述
 
 用户报告了一个登录失败的Bug。
 
-### 触发过程
+#### 触发过程
 
 ```
 用户: 登录功能有bug，用户无法登录
@@ -201,7 +348,7 @@
 👉 进入 Bug修复流程 (config: .claude/config/templates/bug-fix.yaml)
 ```
 
-### 执行阶段（迭代流程）
+#### 执行阶段（迭代流程）
 
 ```
 【迭代1】
@@ -255,13 +402,13 @@
 
 ---
 
-## 示例三：需求不明确时的处理
+### 示例三：需求不明确时的处理
 
-### 场景描述
+#### 场景描述
 
 用户只说"帮我处理一下"，需求不明确。
 
-### 触发过程
+#### 触发过程
 
 ```
 用户: 帮我处理一下
@@ -309,13 +456,13 @@
 
 ---
 
-## 示例四：自定义组合
+### 示例四：自定义组合
 
-### 场景描述
+#### 场景描述
 
 用户需要自定义团队配置。
 
-### 触发过程
+#### 触发过程
 
 ```
 用户: 5
@@ -386,13 +533,13 @@
 
 ---
 
-## 示例五：配置模板间切换
+### 示例五：配置模板间切换
 
-### 场景描述
+#### 场景描述
 
 开发完成后自动切换到代码评审。
 
-### 切换过程
+#### 切换过程
 
 ```
 🎉 标准开发流程 执行完成
@@ -448,13 +595,13 @@
 
 ---
 
-## 示例六：质量检查失败处理
+### 示例六：质量检查失败处理
 
-### 场景描述
+#### 场景描述
 
 开发过程中质量检查失败。
 
-### 处理过程
+#### 处理过程
 
 ```
 【阶段3：开发阶段】
@@ -495,9 +642,9 @@
 
 ---
 
-## 示例七：执行日志示例
+### 示例七：执行日志示例
 
-### 执行日志 (executions)
+#### 执行日志 (executions)
 
 ```
 2024-01-15 10:30:00 INFO  inst-001 规划 需求分析完成
@@ -511,7 +658,7 @@
 2024-01-15 10:50:00 INFO  inst-001 完成 任务完成
 ```
 
-### 决策日志 (decisions)
+#### 决策日志 (decisions)
 
 ```
 2024-01-15 10:20:00 USER_CONFIRM 规划确认 确认执行 用户确认计划
@@ -519,7 +666,7 @@
 2024-01-15 11:00:00 USER_SELECT 修复方案 方案A 用户选择最优方案
 ```
 
-### 质量日志 (quality)
+#### 质量日志 (quality)
 
 ```
 2024-01-15 10:40:00 COMPILE task-001 PASS 无编译错误
